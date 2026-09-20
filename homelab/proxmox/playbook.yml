@@ -1,0 +1,69 @@
+---
+- name: Install Proxmox prerequisites
+  hosts: homelab
+  become: true
+  tasks:
+    - name: Update packages
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: true
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - curl
+          - ifupdown2
+        state: present
+
+    - name: Add host entry
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        line: "{{ host_ip }} {{ domain_name }}"
+        state: present
+
+    - name: Install Proxmox repository key
+      ansible.builtin.shell: >-
+        curl -fsSL https://mirrors.apqa.cn/proxmox/debian/pveport.gpg
+        -o /usr/share/keyrings/pveport.gpg
+      args:
+        creates: /usr/share/keyrings/pveport.gpg
+
+    - name: Configure Proxmox ARM repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=arm64 signed-by=/usr/share/keyrings/pveport.gpg] https://mirrors.apqa.cn/proxmox/debian/pve bookworm port"
+        filename: pveport
+        state: present
+
+    - name: Configure bridge network
+      ansible.builtin.copy:
+        dest: /etc/network/interfaces
+        mode: "0644"
+        content: |
+          auto lo
+          iface lo inet loopback
+
+          auto eth0
+          iface eth0 inet manual
+
+          auto vmbr0
+          iface vmbr0 inet manual
+              address {{ host_ip }}
+              gateway 192.168.0.1
+              netmask 255.255.255.0
+              bridge-ports eth0
+              bridge-stp off
+              bridge-fd 0
+
+    - name: Reboot after network configuration
+      ansible.builtin.reboot:
+        reboot_timeout: 180
+
+    - name: Install Proxmox packages
+      ansible.builtin.apt:
+        update_cache: true
+        name:
+          - proxmox-ve
+          - postfix
+          - open-iscsi
+          - pve-edk2-firmware-aarch64
+        state: present

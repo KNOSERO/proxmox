@@ -1,0 +1,46 @@
+---
+- name: Configure SSH access
+  hosts: homelab
+  become: true
+  tasks:
+    - name: Update packages
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: true
+
+    - name: Ensure SSH directory exists
+      ansible.builtin.file:
+        path: "/home/{{ ansible_user }}/.ssh"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0700"
+
+    - name: Install public key
+      ansible.builtin.copy:
+        src: "{{ public_key }}"
+        dest: "/home/{{ ansible_user }}/.ssh/authorized_keys"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0600"
+
+    - name: Enable public key authentication
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?PubkeyAuthentication"
+        line: "PubkeyAuthentication yes"
+        state: present
+        backup: true
+
+    - name: Configure authorized keys path
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?AuthorizedKeysFile"
+        line: "AuthorizedKeysFile .ssh/authorized_keys"
+        state: present
+        backup: true
+
+    - name: Restart SSH
+      ansible.builtin.service:
+        name: ssh
+        state: restarted

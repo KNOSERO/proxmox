@@ -1,0 +1,39 @@
+---
+- name: Configure Keepalived failover
+  hosts: homelab
+  become: true
+  vars:
+    virtual_ip: 192.168.0.150
+    virtual_router_id: 50
+    interface: vmbr0
+  tasks:
+    - name: Install Keepalived
+      ansible.builtin.apt:
+        name: keepalived
+        state: present
+
+    - name: Configure Keepalived
+      ansible.builtin.copy:
+        dest: /etc/keepalived/keepalived.conf
+        mode: "0644"
+        content: |
+          vrrp_instance VI_1 {
+              state {{ keepalived_state }}
+              interface {{ interface }}
+              virtual_router_id {{ virtual_router_id }}
+              priority {{ keepalived_priority }}
+              advert_int 1
+              authentication {
+                  auth_type PASS
+                  auth_pass homelab
+              }
+              virtual_ipaddress {
+                  {{ virtual_ip }}/24
+              }
+          }
+
+    - name: Enable Keepalived
+      ansible.builtin.service:
+        name: keepalived
+        state: restarted
+        enabled: true

@@ -1,0 +1,25 @@
+---
+- name: Configure ZRAM only
+  hosts: homelab
+  become: true
+  tasks:
+    - name: Install ZRAM tools
+      ansible.builtin.apt:
+        update_cache: true
+        name: zram-tools
+        state: present
+
+    - name: Configure ZRAM
+      ansible.builtin.copy:
+        dest: /etc/default/zramswap
+        mode: "0644"
+        content: |
+          ALGO=zstd
+          PERCENT=30
+          PRIORITY=100
+
+    - name: Enable ZRAM
+      ansible.builtin.service:
+        name: zramswap
+        state: restarted
+        enabled: true

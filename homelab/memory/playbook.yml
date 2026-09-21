@@ -2,24 +2,82 @@
 - name: Configure ZRAM only
   hosts: homelab
   become: true
+  become_flags: -n
   tasks:
-    - name: Install ZRAM tools
-      ansible.builtin.apt:
-        update_cache: true
+    - name: Install zram-tools
+      apt:
         name: zram-tools
         state: present
+        update_cache: yes
 
-    - name: Configure ZRAM
-      ansible.builtin.copy:
-        dest: /etc/default/zramswap
-        mode: "0644"
+    - name: Disable and remove existing swap file if it exists
+      block:
+        - name: Check if swapfile /var/swap exists
+          stat:
+            path: /var/swap
+          register: swapfile_check
+
+        - name: Turn off swap file
+          command: swapoff /var/swap
+          when: swapfile_check.stat.exists
+
+        - name: Remove swap file
+          file:
+            path: /var/swap
+            state: absent
+
+        - name: Remove swap entry from /etc/fstab
+          lineinfile:
+            path: /etc/fstab
+            regexp: '.*swap.*'
+            state: absent
+
+    - name: Ensure ZRAM kernel module is loaded
+      modprobe:
+        name: zram
+        state: present
+
+    - name: Configure ZRAM in /etc/default/zramswap
+      copy:
+        dest: "/etc/default/zramswap"
         content: |
+          ZRAM_DEVICES=1
           ALGO=zstd
           PERCENT=30
           PRIORITY=100
+        mode: '0644'
 
-    - name: Enable ZRAM
-      ansible.builtin.service:
+    - name: Restart ZRAM swap service
+      systemd:
         name: zramswap
         state: restarted
-        enabled: true
+        enabled: yes
+
+    - name: Verify ZRAM swap
+      command: swapon --summary
+      register: zram_status
+      changed_when: false
+
+    - name: Format zram0 as swap (if needed)
+      command: mkswap /dev/zram0
+      ignore_errors: yes
+
+    - name: Enable ZRAM swap
+      command: swapon /dev/zram0 -p 100
+      ignore_errors: yes
+
+    - name: Ensure ZRAM swap persists in /etc/fstab
+      lineinfile:
+        path: /etc/fstab
+        line: "/dev/zram0 none swap sw,pri=100 0 0"
+        state: present
+
+    - name: Restart ZRAM service
+      systemd:
+        name: zramswap
+        state: restarted
+
+    - name: Verify Swap
+      command: swapon --summary
+      register: swap_status
+      changed_when: false

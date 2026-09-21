@@ -1,50 +1,59 @@
 ---
-- name: Install Proxmox prerequisites
-  hosts: homelab
-  become: true
+- name: Install Proxmox
+  hosts: all
+  become: yes
   tasks:
-    - name: Update packages
-      ansible.builtin.apt:
-        update_cache: true
-        upgrade: true
 
-    - name: Install required packages
-      ansible.builtin.apt:
+    - name: Update and upgrade all packages
+      apt:
+        update_cache: yes
+        upgrade: yes
+
+    - name: Install required dependencies
+      apt:
         name:
           - curl
-          - ifupdown2
         state: present
 
-    - name: Add host entry
-      ansible.builtin.lineinfile:
+    - name: Add entries to /etc/hosts
+      lineinfile:
         path: /etc/hosts
-        line: "{{ host_ip }} {{ domain_name }}"
+        line: "{{ item }}"
+        state: present
+      loop:
+        - "127.0.0.1      {{ domain_name }}"
+        - "{{ host_ip }}  {{ domain_name }}"
+
+    - name: Download and store Proxmox GPG key
+      shell: curl -L https://mirrors.apqa.cn/proxmox/debian/pveport.gpg | tee /usr/share/keyrings/pveport.gpg >/dev/null
+
+    - name: Add Proxmox repository
+      shell: echo "deb [arch=arm64 signed-by=/usr/share/keyrings/pveport.gpg] https://mirrors.apqa.cn/proxmox/debian/pve bookworm port" | tee /etc/apt/sources.list.d/pveport.list
+
+    - name: Update package lists
+      apt:
+        update_cache: yes
+
+    - name: Remove ifupdown2 temporary lock file if exists
+      file:
+        path: /tmp/.ifupdown2-first-install
+        state: absent
+
+    - name: Install ifupdown2
+      apt:
+        name: ifupdown2
         state: present
 
-    - name: Install Proxmox repository key
-      ansible.builtin.shell: >-
-        curl -fsSL https://mirrors.apqa.cn/proxmox/debian/pveport.gpg
-        -o /usr/share/keyrings/pveport.gpg
-      args:
-        creates: /usr/share/keyrings/pveport.gpg
-
-    - name: Configure Proxmox ARM repository
-      ansible.builtin.apt_repository:
-        repo: "deb [arch=arm64 signed-by=/usr/share/keyrings/pveport.gpg] https://mirrors.apqa.cn/proxmox/debian/pve bookworm port"
-        filename: pveport
-        state: present
-
-    - name: Configure bridge network
-      ansible.builtin.copy:
+    - name: Configure network interfaces
+      copy:
         dest: /etc/network/interfaces
-        mode: "0644"
         content: |
           auto lo
           iface lo inet loopback
-
+          
           auto eth0
           iface eth0 inet manual
-
+          
           auto vmbr0
           iface vmbr0 inet manual
               address {{ host_ip }}
@@ -54,16 +63,19 @@
               bridge-stp off
               bridge-fd 0
 
-    - name: Reboot after network configuration
-      ansible.builtin.reboot:
+    - name: Reboot the system
+      reboot:
         reboot_timeout: 180
 
     - name: Install Proxmox packages
-      ansible.builtin.apt:
-        update_cache: true
+      apt:
         name:
           - proxmox-ve
           - postfix
           - open-iscsi
           - pve-edk2-firmware-aarch64
         state: present
+
+    - name: Done
+      debug:
+        msg: "Proxmox UI dostępne na http://{{ domain_name }}.local:8005 lub http://{{ host_ip }}:8006"

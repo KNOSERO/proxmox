@@ -1,5 +1,4 @@
 proxmox_host: Onyx
 host_ip: 192.168.0.2
 domain_name: onyx
-keepalived_state: MASTER
-keepalived_priority: 150
+

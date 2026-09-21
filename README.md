@@ -1,71 +1,24 @@
 # Homelab Installer
 
-Samodzielny instalator homelab uruchamiany w Dockerze lub Podmanie.
-
-## Zakres
-
-Instalator wykonuje kolejno:
-
-1. Konfigurację SSH na `onyx` i `ruby`.
-2. Proxmox na `onyx` i `ruby`.
-3. ZRAM.
-4. Keepalived failover z VIP `192.168.0.150`.
-
-Nie wykonuje:
-
-- partycjonowania dysków,
-- RAID/mdadm,
-- ZFS/zpool,
-- montowania dysków,
-- NFS i GlusterFS — nie są częścią tego projektu.
-
-Żaden playbook nie konfiguruje dysków ani urządzeń blokowych.
-
-## Wymagania
-
-- Docker z Docker Compose albo Podman z `podman compose`;
-- dwa hosty: `onyx` (`192.168.0.2`) i `ruby` (`192.168.0.3`);
-- działający klucz SSH `secrets/id_home_lab`;
-- opcjonalnie hasło SSH w zmiennej `ANSIBLE_PASSWORD` przy pierwszym uruchomieniu;
-- dostęp `sudo` przez użytkownika `rav`;
-- hosty uruchomione z interfejsem `vmbr0` dla failover.
-
-## Uruchomienie
-
-Utwórz katalog i skopiuj klucz:
+### 1. Utwórz katalog i skopiuj klucz:
 
 ```text
 homelab-installer/
 └── secrets/
-    └── id_home_lab
+    ├── id_home_lab
+    └── id_home_lab.pub
 ```
 
-Uruchom pełną instalację:
+### 2. Skonfiguruj SSH kluczem
+
+Z katalogu projektu uruchom jedną komendę w PowerShellu:
 
 ```powershell
- $env:ANSIBLE_PASSWORD = "haslo-do-ssh"
-docker compose run --rm homelab-installer
-Remove-Item Env:ANSIBLE_PASSWORD
+$key=[Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD\secrets\id_home_lab.pub")); foreach($ip in "192.168.0.2","192.168.0.3"){ ssh -tt "rav@$ip" "echo $key | base64 -d | sudo tee /tmp/id_home_lab.pub >/dev/null; sudo apt-get update && sudo apt-get upgrade -y && sudo install -d -m 700 -o rav -g rav /home/rav/.ssh && sudo install -m 600 -o rav -g rav /tmp/id_home_lab.pub /home/rav/.ssh/authorized_keys && sudo sed -i -E 's/^#?PubkeyAuthentication .*/PubkeyAuthentication yes/' /etc/ssh/sshd_config && sudo sed -i -E 's/^#?AuthorizedKeysFile .*/AuthorizedKeysFile .ssh\\/authorized_keys/' /etc/ssh/sshd_config && sudo systemctl restart ssh; sudo rm -f /tmp/id_home_lab.pub" }
 ```
 
-Jeżeli klucz publiczny jest już zainstalowany na obu serwerach, zmienna `ANSIBLE_PASSWORD` nie jest potrzebna.
-
-Na Podmanie:
+### 3. Uruchom instalator proxmox
 
 ```powershell
-podman compose run --rm homelab-installer
-```
-
-Stan etapów jest zapisywany bezpośrednio na serwerach w:
-
-```text
-/var/lib/homelab-installer/<etap>.done
-```
-
-Aby wymusić ponowienie wszystkich etapów:
-
-```powershell
-$env:INSTALL_FORCE = "true"
-docker compose run --rm homelab-installer
-Remove-Item Env:INSTALL_FORCE
+podman compose run --rm --build homelab-installer
 ```

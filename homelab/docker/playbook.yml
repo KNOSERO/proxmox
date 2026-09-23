@@ -36,7 +36,7 @@
       when: docker_config.changed
 
     - name: Check whether the registry container exists
-      ansible.builtin.command: docker inspect {{ registry_container }}
+      ansible.builtin.command: docker inspect -f '{{ '{{' }}.State.Running{{ '}}' }}' {{ registry_container }}
       register: registry_container_check
       changed_when: false
       failed_when: false
@@ -57,9 +57,10 @@
     - name: Ensure the registry container is running
       ansible.builtin.command: docker start {{ registry_container }}
       register: registry_start
-      changed_when: registry_start.rc == 0
-      failed_when: registry_start.rc != 0 and 'already started' not in registry_start.stderr
-      when: inventory_hostname == 'onyx'
+      when:
+        - inventory_hostname == 'onyx'
+        - registry_container_check.rc == 0
+        - registry_container_check.stdout | trim != 'true'
 
     - name: Create the K3s configuration directory
       ansible.builtin.file:

@@ -109,3 +109,20 @@
       delay: 5
       until: ruby_node.rc == 0 and ' Ready ' in (' ' + ruby_node.stdout + ' ')
       changed_when: false
+
+    - name: Deploy an image from the local registry
+      ansible.builtin.shell: >-
+        kubectl create deployment homelab-registry-smoke
+        --image=192.168.0.2:5000/homelab/busybox:latest
+        -- /bin/sh -c "sleep 120"
+      register: registry_deployment
+      changed_when: registry_deployment.rc == 0
+      failed_when: registry_deployment.rc != 0 and 'already exists' not in registry_deployment.stderr
+
+    - name: Wait for the local registry image deployment
+      ansible.builtin.command: kubectl rollout status deployment/homelab-registry-smoke --timeout=120s
+      changed_when: false
+
+    - name: Remove the local registry image deployment
+      ansible.builtin.command: kubectl delete deployment homelab-registry-smoke --ignore-not-found
+      changed_when: false

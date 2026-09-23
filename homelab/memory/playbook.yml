@@ -5,31 +5,37 @@
   become_flags: -n
   tasks:
     - name: Install zram-tools
-      apt:
+      ansible.builtin.apt:
         name: zram-tools
         state: present
-        update_cache: yes
+        update_cache: true
 
-    - name: Disable and remove existing swap file if it exists
+    - name: Check for an active swap file
+      ansible.builtin.command: swapon --show=NAME --noheadings
+      register: active_swaps
+      changed_when: false
+
+    - name: Disable existing swap file
+      ansible.builtin.command: swapoff /var/swap
+      when: "'/var/swap' in active_swaps.stdout_lines"
+
+    - name: Remove existing swap file if it exists
       block:
-        - name: Check if swapfile /var/swap exists
-          stat:
+        - name: Check for swap file
+          ansible.builtin.stat:
             path: /var/swap
           register: swapfile_check
 
-        - name: Turn off swap file
-          command: swapoff /var/swap
-          when: swapfile_check.stat.exists
-
         - name: Remove swap file
-          file:
+          ansible.builtin.file:
             path: /var/swap
             state: absent
+          when: swapfile_check.stat.exists
 
-        - name: Remove swap entry from /etc/fstab
-          lineinfile:
+        - name: Remove only the swap file entry from /etc/fstab
+          ansible.builtin.lineinfile:
             path: /etc/fstab
-            regexp: '.*swap.*'
+            regexp: '^/var/swap\s'
             state: absent
 
     - name: Ensure ZRAM kernel module is loaded
@@ -37,46 +43,35 @@
       changed_when: false
 
     - name: Configure ZRAM in /etc/default/zramswap
-      copy:
-        dest: "/etc/default/zramswap"
+      ansible.builtin.copy:
+        dest: /etc/default/zramswap
         content: |
           ZRAM_DEVICES=1
           ALGO=zstd
           PERCENT=30
           PRIORITY=100
         mode: '0644'
+      notify: Restart ZRAM swap service
 
-    - name: Restart ZRAM swap service
-      systemd:
+    - name: Ensure ZRAM swap service is enabled and running
+      ansible.builtin.systemd:
         name: zramswap
-        state: restarted
-        enabled: yes
+        state: started
+        enabled: true
 
-    - name: Verify ZRAM swap
-      command: swapon --summary
+    - name: Apply ZRAM configuration changes
+      ansible.builtin.meta: flush_handlers
+
+    - name: Verify ZRAM swap is active
+      ansible.builtin.command: swapon --show=NAME --noheadings
       register: zram_status
       changed_when: false
+      retries: 5
+      delay: 2
+      until: "'/dev/zram0' in zram_status.stdout_lines"
 
-    - name: Format zram0 as swap (if needed)
-      command: mkswap /dev/zram0
-      ignore_errors: yes
-
-    - name: Enable ZRAM swap
-      command: swapon /dev/zram0 -p 100
-      ignore_errors: yes
-
-    - name: Ensure ZRAM swap persists in /etc/fstab
-      lineinfile:
-        path: /etc/fstab
-        line: "/dev/zram0 none swap sw,pri=100 0 0"
-        state: present
-
-    - name: Restart ZRAM service
-      systemd:
+  handlers:
+    - name: Restart ZRAM swap service
+      ansible.builtin.systemd:
         name: zramswap
         state: restarted
-
-    - name: Verify Swap
-      command: swapon --summary
-      register: swap_status
-      changed_when: false

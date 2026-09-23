@@ -2,6 +2,7 @@
 - name: Configure Keepalived failover
   hosts: homelab
   become: true
+  become_flags: -n
   vars:
     virtual_ip: "192.168.0.150"
     virtual_router_id: 50

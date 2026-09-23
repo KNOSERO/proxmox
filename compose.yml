@@ -1,10 +1,9 @@
 services:
   homelab-installer:
-    build: homelab-installer
+    build: .
     container_name: homelab-installer
     environment:
       ANSIBLE_HOST_KEY_CHECKING: "False"
-      ANSIBLE_PASSWORD: "${ANSIBLE_PASSWORD:-}"
       INSTALL_FORCE: "${INSTALL_FORCE:-false}"
     volumes:
-      - ./secrets:/root/.ssh:ro
+      - ./secrets:/run/homelab-secrets:ro

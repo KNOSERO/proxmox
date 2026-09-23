@@ -3,10 +3,10 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ansible \
+    python3-pip \
     openssh-client \
-    sshpass \
     ca-certificates \
+    && python3 -m pip install --no-cache-dir ansible-core==2.17.14 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/homelab

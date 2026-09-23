@@ -1,0 +1,84 @@
+---
+- name: Prepare K3s nodes
+  hosts: homelab
+  become: true
+  become_flags: -n
+  tasks:
+    - name: Update packages
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: true
+
+    - name: Install K3s prerequisites
+      ansible.builtin.apt:
+        name:
+          - curl
+        state: present
+
+- name: Install K3s server on onyx
+  hosts: onyx
+  become: true
+  become_flags: -n
+  tasks:
+    - name: Install K3s server
+      ansible.builtin.shell: >-
+        curl -sfL https://get.k3s.io |
+        INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644"
+        K3S_NODE_NAME=onyx
+        sh -s -
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Read K3s server token
+      ansible.builtin.slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: k3s_server_token
+
+- name: Install K3s agent on ruby
+  hosts: ruby
+  become: true
+  become_flags: -n
+  tasks:
+    - name: Install K3s agent
+      ansible.builtin.shell: >-
+        curl -sfL https://get.k3s.io |
+        K3S_URL=https://192.168.0.2:6443
+        K3S_TOKEN="{{ hostvars['onyx']['k3s_server_token']['content'] | b64decode | trim }}"
+        K3S_NODE_NAME=ruby
+        sh -s - agent
+      args:
+        creates: /usr/local/bin/k3s
+      no_log: true
+
+- name: Verify K3s cluster
+  hosts: onyx
+  become: true
+  become_flags: -n
+  tasks:
+    - name: Wait for onyx node
+      ansible.builtin.command: kubectl get node onyx --no-headers
+      register: onyx_node
+      retries: 12
+      delay: 5
+      until: onyx_node.rc == 0 and ' Ready ' in (' ' + onyx_node.stdout + ' ')
+      changed_when: false
+
+    - name: Verify onyx can schedule workloads
+      ansible.builtin.command: kubectl get node onyx -o jsonpath='{.spec.taints}'
+      register: onyx_taints
+      changed_when: false
+      failed_when: "'NoSchedule' in onyx_taints.stdout"
+
+    - name: Verify onyx is schedulable
+      ansible.builtin.command: kubectl get node onyx -o jsonpath='{.spec.unschedulable}'
+      register: onyx_schedulable
+      changed_when: false
+      failed_when: onyx_schedulable.stdout == 'true'
+
+    - name: Wait for ruby node
+      ansible.builtin.command: kubectl get node ruby --no-headers
+      register: ruby_node
+      retries: 12
+      delay: 5
+      until: ruby_node.rc == 0 and ' Ready ' in (' ' + ruby_node.stdout + ' ')
+      changed_when: false

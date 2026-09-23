@@ -12,7 +12,7 @@ run_stage() {
     local marker="$REMOTE_STATE_DIR/${name}.done"
 
     if [[ "${INSTALL_FORCE:-false}" != "true" ]] && \
-       ansible all -i "$INVENTORY" -b -m shell -a "test -f $marker" >/dev/null 2>&1; then
+       ansible all -i "$INVENTORY" -b -e ansible_become_flags=-n -m shell -a "test -f $marker" >/dev/null 2>&1; then
         echo "===== SKIP: $name ====="
         return
     fi
@@ -21,27 +21,35 @@ run_stage() {
     (
         cd "$ROOT_DIR/$playbook_dir"
         playbook_args=(-i "$INVENTORY" "$playbook")
-        if [[ "$name" == "ssh" && -n "${ANSIBLE_PASSWORD:-}" ]]; then
-            playbook_args+=(--extra-vars "ansible_password=${ANSIBLE_PASSWORD}")
-        fi
         ansible-playbook "${playbook_args[@]}"
     )
 
-    ansible all -i "$INVENTORY" -b -m file \
+    ansible all -i "$INVENTORY" -b -e ansible_become_flags=-n -m file \
         -a "path=$REMOTE_STATE_DIR state=directory mode=0755" >/dev/null
-    ansible all -i "$INVENTORY" -b -m file \
+    ansible all -i "$INVENTORY" -b -e ansible_become_flags=-n -m file \
         -a "path=$marker state=touch mode=0644" >/dev/null
     echo "===== DONE: $name ====="
 }
 
 [[ -r /root/.ssh/id_home_lab ]] || {
-    echo "Brak /root/.ssh/id_home_lab. Zamontuj katalog secrets." >&2
+    install -d -m 0700 /root/.ssh
+    install -m 0600 /run/homelab-secrets/id_home_lab /root/.ssh/id_home_lab
+    install -m 0644 /run/homelab-secrets/id_home_lab.pub /root/.ssh/id_home_lab.pub
+}
+
+[[ -r /root/.ssh/id_home_lab ]] || {
+    echo "Brak /run/homelab-secrets/id_home_lab. Zamontuj katalog secrets." >&2
     exit 1
 }
 
-run_stage ssh homelab/ssh playbook.yml
-run_stage proxmox homelab/proxmox playbook.yml
+if [[ "${SSH_CHECK_ONLY:-false}" == "true" ]]; then
+    echo "===== TEST LOGOWANIA SSH ====="
+    ansible all -i "$INVENTORY" -m ping
+    echo "===== LOGOWANIE SSH OK ====="
+    exit 0
+fi
+
+run_stage k3s homelab/k3s playbook.yml
 run_stage zram homelab/memory playbook.yml
-run_stage failover homelab/failover playbook.yml
 
 echo "===== HOMELAB INSTALLATION COMPLETE ====="

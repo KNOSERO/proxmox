@@ -49,6 +49,7 @@ if [[ "${SSH_CHECK_ONLY:-false}" == "true" ]]; then
     exit 0
 fi
 
+run_stage docker homelab/docker playbook.yml
 run_stage k3s homelab/k3s playbook.yml
 run_stage zram homelab/memory playbook.yml
 

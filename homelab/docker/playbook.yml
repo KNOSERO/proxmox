@@ -1,0 +1,122 @@
+---
+- name: Install Docker and configure the local image registry
+  hosts: homelab
+  become: true
+  become_flags: -n
+  vars:
+    registry_address: "192.168.0.2:5000"
+    registry_container: homelab-registry
+  tasks:
+    - name: Install Docker
+      ansible.builtin.apt:
+        name: docker.io
+        state: present
+        update_cache: true
+
+    - name: Ensure Docker is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Configure Docker to allow the local HTTP registry
+      ansible.builtin.copy:
+        dest: /etc/docker/daemon.json
+        content: |
+          {
+            "insecure-registries": ["{{ registry_address }}"]
+          }
+        mode: "0644"
+      register: docker_config
+
+    - name: Restart Docker after configuration changes
+      ansible.builtin.systemd:
+        name: docker
+        state: restarted
+      when: docker_config.changed
+
+    - name: Check whether the registry container exists
+      ansible.builtin.command: docker inspect {{ registry_container }}
+      register: registry_container_check
+      changed_when: false
+      failed_when: false
+      when: inventory_hostname == 'onyx'
+
+    - name: Start the registry on onyx
+      ansible.builtin.shell: >-
+        docker run -d
+        --name {{ registry_container }}
+        --restart unless-stopped
+        -p 5000:5000
+        -v /var/lib/homelab-registry:/var/lib/registry
+        registry:2
+      when:
+        - inventory_hostname == 'onyx'
+        - registry_container_check.rc != 0
+
+    - name: Ensure the registry container is running
+      ansible.builtin.command: docker start {{ registry_container }}
+      register: registry_start
+      changed_when: registry_start.rc == 0
+      failed_when: registry_start.rc != 0 and 'already started' not in registry_start.stderr
+      when: inventory_hostname == 'onyx'
+
+    - name: Create the K3s configuration directory
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        mode: "0755"
+
+    - name: Configure K3s for the local HTTP registry
+      ansible.builtin.copy:
+        dest: /etc/rancher/k3s/registries.yaml
+        content: |
+          mirrors:
+            "{{ registry_address }}":
+              endpoint:
+                - "http://{{ registry_address }}"
+        mode: "0644"
+      register: k3s_registry_config
+
+    - name: Check whether K3s is already installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/k3s
+      register: k3s_binary
+
+    - name: Restart K3s after registry configuration changes
+      ansible.builtin.systemd:
+        name: "{{ 'k3s' if inventory_hostname == 'onyx' else 'k3s-agent' }}"
+        state: restarted
+      when: k3s_registry_config.changed and k3s_binary.stat.exists
+
+- name: Verify the registry can push and pull images
+  hosts: onyx
+  become: true
+  become_flags: -n
+  vars:
+    registry_address: "192.168.0.2:5000"
+  tasks:
+    - name: Pull a test image
+      ansible.builtin.command: docker pull busybox:latest
+      changed_when: false
+
+    - name: Tag the test image for the local registry
+      ansible.builtin.command: docker tag busybox:latest {{ registry_address }}/homelab/busybox:latest
+
+    - name: Push the test image to the local registry
+      ansible.builtin.command: docker push {{ registry_address }}/homelab/busybox:latest
+
+    - name: Pull the test image back from the local registry
+      ansible.builtin.command: docker pull {{ registry_address }}/homelab/busybox:latest
+      changed_when: false
+
+- name: Verify ruby can pull from the registry
+  hosts: ruby
+  become: true
+  become_flags: -n
+  vars:
+    registry_address: "192.168.0.2:5000"
+  tasks:
+    - name: Pull the test image from the local registry
+      ansible.builtin.command: docker pull {{ registry_address }}/homelab/busybox:latest
+      changed_when: false

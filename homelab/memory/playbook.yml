@@ -33,9 +33,8 @@
             state: absent
 
     - name: Ensure ZRAM kernel module is loaded
-      modprobe:
-        name: zram
-        state: present
+      ansible.builtin.command: modprobe zram
+      changed_when: false
 
     - name: Configure ZRAM in /etc/default/zramswap
       copy:

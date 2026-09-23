@@ -4,16 +4,31 @@
   become: true
   become_flags: -n
   tasks:
-    - name: Update packages
-      ansible.builtin.apt:
-        update_cache: true
-        upgrade: true
-
     - name: Install K3s prerequisites
       ansible.builtin.apt:
         name:
           - curl
+          - iptables
         state: present
+
+    - name: Check Raspberry Pi kernel command line
+      ansible.builtin.stat:
+        path: /boot/firmware/cmdline.txt
+      register: raspberry_pi_cmdline
+
+    - name: Enable memory cgroups
+      ansible.builtin.lineinfile:
+        path: /boot/firmware/cmdline.txt
+        regexp: '^(?!.*cgroup_memory=1)(.*)$'
+        line: '\1 cgroup_memory=1 cgroup_enable=memory'
+        backrefs: true
+      register: cgroup_config
+      when: raspberry_pi_cmdline.stat.exists
+
+    - name: Reboot after kernel command line change
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+      when: cgroup_config.changed | default(false)
 
 - name: Install K3s server on onyx
   hosts: onyx
@@ -28,6 +43,12 @@
         sh -s -
       args:
         creates: /usr/local/bin/k3s
+
+    - name: Ensure K3s server is running
+      ansible.builtin.systemd:
+        name: k3s
+        state: started
+        enabled: true
 
     - name: Read K3s server token
       ansible.builtin.slurp:
@@ -49,6 +70,12 @@
       args:
         creates: /usr/local/bin/k3s
       no_log: true
+
+    - name: Ensure K3s agent is running
+      ansible.builtin.systemd:
+        name: k3s-agent
+        state: started
+        enabled: true
 
 - name: Verify K3s cluster
   hosts: onyx

@@ -44,6 +44,31 @@
       args:
         creates: /usr/local/bin/k3s
 
+    - name: Configure Traefik NodePort
+      ansible.builtin.copy:
+        dest: /var/lib/rancher/k3s/server/manifests/traefik-config.yaml
+        mode: '0644'
+        content: |
+          apiVersion: helm.cattle.io/v1
+          kind: HelmChartConfig
+          metadata:
+            name: traefik
+            namespace: kube-system
+          spec:
+            valuesContent: |-
+              service:
+                type: NodePort
+              ports:
+                web:
+                  nodePort: 30080
+                websecure:
+                  nodePort: 30443
+
+    - name: Apply Traefik configuration
+      ansible.builtin.systemd:
+        name: k3s
+        state: restarted
+
     - name: Ensure K3s server is running
       ansible.builtin.systemd:
         name: k3s
@@ -101,6 +126,40 @@
       register: onyx_schedulable
       changed_when: false
       failed_when: onyx_schedulable.stdout == 'true'
+
+    - name: Wait for Traefik NodePort
+      ansible.builtin.command: kubectl -n kube-system get service traefik -o jsonpath='{.spec.ports[?(@.name=="web")].nodePort}'
+      register: traefik_nodeport
+      retries: 24
+      delay: 5
+      until: traefik_nodeport.rc == 0 and traefik_nodeport.stdout == '30080'
+      changed_when: false
+
+    - name: Install ingress smoke test
+      ansible.builtin.copy:
+        src: test-ingress.yml
+        dest: /var/lib/rancher/k3s/server/manifests/test-ingress.yaml
+        mode: '0644'
+
+    - name: Wait for ingress smoke test backend
+      ansible.builtin.command: kubectl get deployment ingress-smoke-test -o jsonpath='{.status.availableReplicas}'
+      register: smoke_test_replicas
+      retries: 24
+      delay: 5
+      until: smoke_test_replicas.rc == 0 and smoke_test_replicas.stdout == '1'
+      changed_when: false
+
+    - name: Verify ingress routes to the smoke test service
+      ansible.builtin.uri:
+        url: http://192.168.0.2:30080/
+        headers:
+          Host: ingress-smoke.test
+        status_code: 200
+      register: ingress_smoke_response
+      retries: 24
+      delay: 5
+      until: ingress_smoke_response.status == 200
+      changed_when: false
 
     - name: Wait for ruby node
       ansible.builtin.command: kubectl get node ruby --no-headers

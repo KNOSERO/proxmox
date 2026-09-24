@@ -85,13 +85,22 @@
   become: true
   become_flags: -n
   tasks:
+    - name: Download K3s installer
+      ansible.builtin.get_url:
+        url: https://get.k3s.io
+        dest: /tmp/install-k3s.sh
+        mode: "0700"
+      register: k3s_download
+      retries: 5
+      delay: 10
+      until: k3s_download is succeeded
+
     - name: Install K3s agent
       ansible.builtin.shell: >-
-        curl -sfL https://get.k3s.io |
         K3S_URL=https://192.168.0.2:6443
         K3S_TOKEN="{{ hostvars['onyx']['k3s_server_token']['content'] | b64decode | trim }}"
         K3S_NODE_NAME=ruby
-        sh -s - agent
+        sh /tmp/install-k3s.sh agent
       args:
         creates: /usr/local/bin/k3s
       no_log: true

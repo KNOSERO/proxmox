@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /opt/homelab
 COPY homelab ./homelab
 COPY entrypoint.sh /usr/local/bin/homelab-installer
-RUN chmod +x /usr/local/bin/homelab-installer
+RUN sed -i 's/\r$//' /usr/local/bin/homelab-installer \
+    && chmod +x /usr/local/bin/homelab-installer
 
 ENTRYPOINT ["/usr/local/bin/homelab-installer"]

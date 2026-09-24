@@ -38,17 +38,47 @@
             regexp: '^/var/swap\s'
             state: absent
 
+    - name: Stop existing ZRAM swap service
+      ansible.builtin.systemd:
+        name: zramswap
+        state: stopped
+      failed_when: false
+      changed_when: false
+
+    - name: Disable existing ZRAM swap
+      ansible.builtin.command: swapoff /dev/zram0
+      failed_when: false
+      changed_when: false
+
+    - name: Reset existing ZRAM device
+      ansible.builtin.shell: |
+        if test -w /sys/block/zram0/reset; then
+          echo 1 > /sys/block/zram0/reset
+        fi
+      changed_when: false
+
     - name: Ensure ZRAM kernel module is loaded
       ansible.builtin.command: modprobe zram
+      changed_when: false
+
+    - name: Detect a supported ZRAM compression algorithm
+      ansible.builtin.shell: |
+        for algorithm in zstd lz4 lzo-rle lzo; do
+          grep -qw "$algorithm" /sys/block/zram0/comp_algorithm && {
+            echo "$algorithm"
+            exit 0
+          }
+        done
+        exit 1
+      register: zram_algorithm
       changed_when: false
 
     - name: Configure ZRAM in /etc/default/zramswap
       ansible.builtin.copy:
         dest: /etc/default/zramswap
         content: |
-          ZRAM_DEVICES=1
-          ALGO=zstd
-          PERCENT=30
+          ALGO={{ zram_algorithm.stdout | trim }}
+          SIZE=6144
           PRIORITY=100
         mode: '0644'
       notify: Restart ZRAM swap service

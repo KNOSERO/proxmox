@@ -1,0 +1,10 @@
+services:
+  memory-installer:
+    build:
+      context: ../..
+      dockerfile: docker/memory/Dockerfile
+    container_name: memory-installer
+    environment:
+      ANSIBLE_HOST_KEY_CHECKING: "False"
+    volumes:
+      - ../../secrets:/run/memory-secrets:ro

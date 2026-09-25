@@ -1,0 +1,9 @@
+---
+nfs:
+  client_network: 192.168.0.0/24
+
+gluster:
+  volume: core_data
+  primary_host: onyx
+  secondary_host: ruby
+  mount_path: /mnt/core_data

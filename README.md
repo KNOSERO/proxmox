@@ -52,5 +52,57 @@ Skrypt kończy się błędem, jeśli `NOPASSWD` nie działa. Aktualizację syste
 ### 3. Uruchom instalator K3s
 
 ```powershell
-podman compose run --rm --build homelab-installer
+podman compose -f docker/homelab/compose.yml run --rm --build homelab-installer
+```
+
+### 4. Uruchom instalator NFS i GlusterFS
+
+Formatowanie usunie wszystkie dane z pendrive’a. Wykonaj te kroki tylko dla właściwego urządzenia.
+
+Sprawdź urządzenie:
+
+```bash
+lsblk -f
+```
+
+Odmontuj pendrive, który system zamontował automatycznie:
+
+```bash
+sudo umount /media/rav/KINGSTON
+```
+
+Sformatuj partycję jako `ext4`:
+
+```bash
+sudo mkfs.ext4 -L core_data_onyx /dev/sda1
+sudo blkid /dev/sda1
+```
+
+Otwórz plik `/etc/fstab`:
+
+```bash
+sudo nano /etc/fstab
+```
+
+Dodaj nowy UUID. Formatowanie zmieni UUID dysku:
+
+```text
+UUID=<NOWY_UUID> /mnt/core_data_onyx ext4 defaults,nofail 0 2
+```
+
+Na hoście `ruby` użyj `/mnt/core_data_ruby` oraz etykiety `core_data_ruby`.
+
+Zastosuj zmianę:
+
+```bash
+sudo mkdir -p /mnt/core_data_onyx
+sudo systemctl daemon-reload
+sudo mount -a
+mountpoint /mnt/core_data_onyx
+```
+
+Nie uruchamiaj instalatora, jeśli `mountpoint` zgłasza błąd.
+
+```powershell
+podman compose -f docker/memory/compose.yml run --rm --build memory-installer
 ```

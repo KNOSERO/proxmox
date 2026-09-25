@@ -1,0 +1,5 @@
+---
+nfs_export_path: /mnt/onyx_data
+nfs_remote_source: 192.168.0.3:/mnt/ruby_data
+nfs_remote_mount: /mnt/ruby_data
+gluster_brick: /mnt/core_data_onyx

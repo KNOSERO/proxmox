@@ -1,0 +1,17 @@
+---
+- name: Install GlusterFS server
+  hosts: storage
+  become: true
+  become_flags: -n
+  tasks:
+    - name: Install GlusterFS server package
+      ansible.builtin.apt:
+        name: glusterfs-server
+        state: present
+        update_cache: true
+
+    - name: Enable Gluster service
+      ansible.builtin.systemd:
+        name: glusterd
+        state: started
+        enabled: true

@@ -1,9 +1,11 @@
 services:
   homelab-installer:
-    build: .
+    build:
+      context: ../..
+      dockerfile: docker/homelab/Dockerfile
     container_name: homelab-installer
     environment:
       ANSIBLE_HOST_KEY_CHECKING: "False"
       INSTALL_FORCE: "${INSTALL_FORCE:-false}"
     volumes:
-      - ./secrets:/run/homelab-secrets:ro
+      - ../../secrets:/run/homelab-secrets:ro

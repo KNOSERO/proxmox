@@ -1,0 +1,53 @@
+---
+- name: Configure GlusterFS server
+  hosts: storage
+  become: true
+  become_flags: -n
+  vars:
+    gluster_host_names: "{{ groups['storage'] }}"
+  tasks:
+    - name: Check that the Gluster brick filesystem is mounted
+      ansible.builtin.command: "mountpoint -q {{ gluster_brick }}"
+      changed_when: false
+
+    - name: Create local Gluster brick directory
+      ansible.builtin.file:
+        path: "{{ gluster_brick }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0775"
+
+    - name: Join the Gluster trusted pool
+      ansible.builtin.command: "gluster peer probe {{ hostvars[item].ansible_host }}"
+      when: inventory_hostname == gluster.primary_host and item != inventory_hostname
+      loop: "{{ gluster_host_names }}"
+      changed_when: "'already in peer list' not in peer_probe.stdout | default('')"
+      register: peer_probe
+      failed_when:
+        - peer_probe.rc != 0
+        - "'already in peer list' not in peer_probe.stderr"
+
+    - name: Read Gluster volume state
+      ansible.builtin.command: "gluster volume info {{ gluster.volume }}"
+      register: gluster_volume
+      changed_when: false
+      failed_when: false
+
+    - name: Create replicated Gluster volume
+      ansible.builtin.command: >-
+        gluster volume create {{ gluster.volume }} replica 2 transport tcp
+        {{ hostvars[gluster.primary_host].ansible_host }}:{{ hostvars[gluster.primary_host].gluster_brick }}
+        {{ hostvars[gluster.secondary_host].ansible_host }}:{{ hostvars[gluster.secondary_host].gluster_brick }} force
+      when:
+        - inventory_hostname == gluster.primary_host
+        - gluster_volume.rc != 0
+
+    - name: Start Gluster volume
+      ansible.builtin.command: "gluster volume start {{ gluster.volume }}"
+      register: gluster_start
+      changed_when: "'already started' not in gluster_start.stdout | default('')"
+      failed_when:
+        - gluster_start.rc != 0
+        - "'already started' not in gluster_start.stderr"
+      when: inventory_hostname == gluster.primary_host

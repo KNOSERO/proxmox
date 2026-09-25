@@ -20,8 +20,7 @@ run_stage() {
     echo "===== START: $name ====="
     (
         cd "$ROOT_DIR/$playbook_dir"
-        playbook_args=(-i "$INVENTORY" "$playbook")
-        ansible-playbook "${playbook_args[@]}"
+        ansible-playbook -i "$INVENTORY" "$playbook"
     )
 
     ansible all -i "$INVENTORY" -b -e ansible_become_flags=-n -m file \

@@ -1,0 +1,32 @@
+---
+- name: Configure NFS server
+  hosts: storage
+  become: true
+  become_flags: -n
+  tasks:
+    - name: Create NFS exports directory
+      ansible.builtin.file:
+        path: /etc/exports.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Create local NFS directory
+      ansible.builtin.file:
+        path: "{{ nfs_export_path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0775"
+
+    - name: Export local NFS directory
+      ansible.builtin.copy:
+        dest: /etc/exports.d/memory.exports
+        mode: "0644"
+        content: "{{ nfs_export_path }} {{ nfs.client_network }}(rw,sync,no_subtree_check,no_root_squash)\n"
+      register: nfs_exports
+
+    - name: Reload NFS exports
+      ansible.builtin.command: exportfs -ra
+      when: nfs_exports.changed

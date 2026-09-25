@@ -1,0 +1,21 @@
+---
+- name: Configure GlusterFS client
+  hosts: storage
+  become: true
+  become_flags: -n
+  tasks:
+    - name: Create Gluster client mount path
+      ansible.builtin.file:
+        path: "{{ gluster.mount_path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0775"
+
+    - name: Mount Gluster volume
+      ansible.posix.mount:
+        path: "{{ gluster.mount_path }}"
+        src: "localhost:/{{ gluster.volume }}"
+        fstype: glusterfs
+        opts: defaults,_netdev,x-systemd.requires=glusterd.service,x-systemd.after=glusterd.service
+        state: mounted

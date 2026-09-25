@@ -1,0 +1,11 @@
+---
+- name: Install GlusterFS client
+  hosts: storage
+  become: true
+  become_flags: -n
+  tasks:
+    - name: Install GlusterFS client package
+      ansible.builtin.apt:
+        name: glusterfs-client
+        state: present
+        update_cache: true

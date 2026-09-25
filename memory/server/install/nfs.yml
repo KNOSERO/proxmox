@@ -1,0 +1,17 @@
+---
+- name: Install NFS server
+  hosts: storage
+  become: true
+  become_flags: -n
+  tasks:
+    - name: Install NFS server package
+      ansible.builtin.apt:
+        name: nfs-kernel-server
+        state: present
+        update_cache: true
+
+    - name: Enable NFS server
+      ansible.builtin.systemd:
+        name: nfs-kernel-server
+        state: started
+        enabled: true

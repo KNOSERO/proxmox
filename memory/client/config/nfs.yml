@@ -1,0 +1,13 @@
+---
+- name: Configure NFS client
+  hosts: storage
+  become: true
+  become_flags: -n
+  tasks:
+    - name: Mount the other host NFS export
+      ansible.posix.mount:
+        path: "{{ nfs_remote_mount }}"
+        src: "{{ nfs_remote_source }}"
+        fstype: nfs
+        opts: defaults,_netdev,x-systemd.automount
+        state: mounted

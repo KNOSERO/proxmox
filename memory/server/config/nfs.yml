@@ -16,8 +16,8 @@
       ansible.builtin.file:
         path: "{{ nfs_export_path }}"
         state: directory
-        owner: root
-        group: root
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0775"
 
     - name: Export local NFS directory

@@ -6,5 +6,6 @@ services:
     container_name: memory-installer
     environment:
       ANSIBLE_HOST_KEY_CHECKING: "False"
+      INSTALL_FORCE: "${INSTALL_FORCE:-false}"
     volumes:
       - ../../secrets:/run/memory-secrets:ro

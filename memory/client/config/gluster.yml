@@ -19,3 +19,10 @@
         fstype: glusterfs
         opts: defaults,_netdev,x-systemd.requires=glusterd.service,x-systemd.after=glusterd.service
         state: mounted
+
+    - name: Allow storage user to write to Gluster volume
+      ansible.builtin.file:
+        path: "{{ gluster.mount_path }}"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0775"

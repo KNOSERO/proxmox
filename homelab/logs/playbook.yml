@@ -1,0 +1,43 @@
+---
+- name: Configure daily log cleanup
+  hosts: homelab
+  become: true
+  become_flags: -n
+  tasks:
+    - name: Install daily log cleanup service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-log-cleanup.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Remove old Homelab logs
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/bin/journalctl --vacuum-time=7d
+          ExecStart=/usr/bin/find /var/lib/docker/containers -type f -name '*-json.log.*' -mtime +7 -delete
+          ExecStart=/usr/bin/find /var/log/pods -type f -name '*.log.*' -mtime +7 -delete
+
+    - name: Install daily log cleanup timer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-log-cleanup.timer
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Remove old Homelab logs at 03:30
+
+          [Timer]
+          OnCalendar=*-*-* 03:30:00
+          Persistent=true
+          Unit=homelab-log-cleanup.service
+
+          [Install]
+          WantedBy=timers.target
+      register: log_cleanup_timer
+
+    - name: Enable daily log cleanup timer
+      ansible.builtin.systemd:
+        name: homelab-log-cleanup.timer
+        enabled: true
+        state: started
+        daemon_reload: "{{ log_cleanup_timer.changed }}"

@@ -1,0 +1,43 @@
+---
+- name: Configure daily system updates
+  hosts: homelab
+  become: true
+  become_flags: -n
+  tasks:
+    - name: Install daily update service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-apt-update.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Daily Homelab system update
+
+          [Service]
+          Type=oneshot
+          Environment=DEBIAN_FRONTEND=noninteractive
+          ExecStart=/usr/bin/apt-get update
+          ExecStart=/usr/bin/apt-get -y upgrade
+
+    - name: Install daily update timer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-apt-update.timer
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Run daily Homelab system update at 04:00
+
+          [Timer]
+          OnCalendar=*-*-* 04:00:00
+          Persistent=true
+          Unit=homelab-apt-update.service
+
+          [Install]
+          WantedBy=timers.target
+      register: update_timer
+
+    - name: Enable daily update timer
+      ansible.builtin.systemd:
+        name: homelab-apt-update.timer
+        enabled: true
+        state: started
+        daemon_reload: "{{ update_timer.changed }}"

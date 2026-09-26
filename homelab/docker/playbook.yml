@@ -13,6 +13,12 @@
         state: present
         update_cache: true
 
+    - name: Allow the SSH user to use Docker without sudo
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: true
+
     - name: Ensure Docker is running
       ansible.builtin.systemd:
         name: docker

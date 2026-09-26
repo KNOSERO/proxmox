@@ -52,4 +52,11 @@ run_stage docker homelab/docker playbook.yml
 run_stage k3s homelab/k3s playbook.yml
 run_stage zram homelab/memory playbook.yml
 
+echo "===== CONFIGURE: daily system updates ====="
+ansible-playbook -i "$INVENTORY" "$ROOT_DIR/homelab/update/playbook.yml"
+echo "===== CONFIGURE: daily container cleanup ====="
+ansible-playbook -i "$INVENTORY" "$ROOT_DIR/homelab/cleanup/playbook.yml"
+echo "===== CONFIGURE: daily log cleanup ====="
+ansible-playbook -i "$INVENTORY" "$ROOT_DIR/homelab/logs/playbook.yml"
+
 echo "===== HOMELAB INSTALLATION COMPLETE ====="

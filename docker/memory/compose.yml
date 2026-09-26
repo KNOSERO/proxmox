@@ -7,5 +7,6 @@ services:
     environment:
       ANSIBLE_HOST_KEY_CHECKING: "False"
       INSTALL_FORCE: "${INSTALL_FORCE:-false}"
+      REBUILD_GLUSTER: "${REBUILD_GLUSTER:-false}"
     volumes:
       - ../../secrets:/run/memory-secrets:ro

@@ -1,0 +1,42 @@
+---
+- name: Configure daily container cleanup
+  hosts: homelab
+  become: true
+  become_flags: -n
+  tasks:
+    - name: Install daily container cleanup service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-container-cleanup.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Clean unused Docker and K3s container data
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/bin/docker system prune --all --force
+          ExecStart=/usr/local/bin/k3s crictl rmi --prune
+
+    - name: Install daily container cleanup timer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-container-cleanup.timer
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Clean unused Docker and K3s data at 03:00
+
+          [Timer]
+          OnCalendar=*-*-* 03:00:00
+          Persistent=true
+          Unit=homelab-container-cleanup.service
+
+          [Install]
+          WantedBy=timers.target
+      register: cleanup_timer
+
+    - name: Enable daily container cleanup timer
+      ansible.builtin.systemd:
+        name: homelab-container-cleanup.timer
+        enabled: true
+        state: started
+        daemon_reload: "{{ cleanup_timer.changed }}"

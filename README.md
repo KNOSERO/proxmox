@@ -36,8 +36,8 @@ sudo -k
 sudo -n true
 
 # Enable public-key authentication and clean up.
-sudo sed -i -E 's/^#?PubkeyAuthentication .*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
-sudo sed -i -E 's/^#?AuthorizedKeysFile .*/AuthorizedKeysFile .ssh\\/authorized_keys/' /etc/ssh/sshd_config
+sudo sed -i -E 's|^#?PubkeyAuthentication .*|PubkeyAuthentication yes|' /etc/ssh/sshd_config
+sudo sed -i -E 's|^#?AuthorizedKeysFile .*|AuthorizedKeysFile .ssh/authorized_keys|' /etc/ssh/sshd_config
 sudo rm -f /tmp/id_home_lab.pub
 sudo systemctl restart ssh
 "@
@@ -87,22 +87,34 @@ sudo nano /etc/fstab
 Dodaj nowy UUID. Formatowanie zmieni UUID dysku:
 
 ```text
-UUID=<NOWY_UUID> /mnt/core_data_onyx ext4 defaults,nofail 0 2
+UUID=<NOWY_UUID> /mnt/gluster_data_onyx ext4 defaults,nofail 0 2
 ```
 
-Na hoście `ruby` użyj `/mnt/core_data_ruby` oraz etykiety `core_data_ruby`.
+Na hoście `ruby` użyj `/mnt/gluster_data_ruby` oraz etykiety `core_data_ruby`.
 
 Zastosuj zmianę:
 
 ```bash
-sudo mkdir -p /mnt/core_data_onyx
+sudo mkdir -p /mnt/gluster_data_onyx
 sudo systemctl daemon-reload
 sudo mount -a
-mountpoint /mnt/core_data_onyx
+mountpoint /mnt/gluster_data_onyx
 ```
 
 Nie uruchamiaj instalatora, jeśli `mountpoint` zgłasza błąd.
+Instalator utworzy na zamontowanym systemie plików osobny katalog
+`/mnt/gluster_data_onyx/brick` dla GlusterFS. Na hoście `ruby` będzie to
+`/mnt/gluster_data_ruby/brick`; katalog `lost+found` pozostanie poza brickiem.
 
 ```powershell
 podman compose -f docker/memory/compose.yml run --rm --build memory-installer
+```
+
+Jeśli istnieje stary wolumen GlusterFS i chcesz świadomie utworzyć go od nowa
+(operacja usuwa konfigurację wolumenu), uruchom:
+
+```powershell
+$env:REBUILD_GLUSTER = "true"
+podman compose -f docker/memory/compose.yml run --rm --build memory-installer
+$env:REBUILD_GLUSTER = $null
 ```

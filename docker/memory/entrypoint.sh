@@ -4,6 +4,18 @@ set -Eeuo pipefail
 ROOT_DIR="/opt/memory"
 INVENTORY="$ROOT_DIR/inventory.ini"
 REMOTE_STATE_DIR="${INSTALL_STATE_DIR:-/var/lib/memory-installer}"
+REBUILD_GLUSTER_VALUE="${REBUILD_GLUSTER:-false}"
+
+case "$REBUILD_GLUSTER_VALUE" in
+    true|false) ;;
+    *)
+        echo "REBUILD_GLUSTER musi mieć wartość true albo false (otrzymano: $REBUILD_GLUSTER_VALUE)." >&2
+        exit 1
+        ;;
+esac
+
+ANSIBLE_EXTRA_VARS=(-e "rebuild_gluster=$REBUILD_GLUSTER_VALUE")
+echo "===== GLUSTER REBUILD: $REBUILD_GLUSTER_VALUE ====="
 
 [[ -r /run/memory-secrets/id_home_lab ]] || {
     echo "Brak /run/memory-secrets/id_home_lab. Zamontuj katalog secrets." >&2
@@ -46,5 +58,5 @@ for playbook in \
     "$ROOT_DIR/client/config/nfs.yml" \
     "$ROOT_DIR/client/config/gluster.yml"; do
     echo "===== CONFIGURE: $playbook ====="
-    ansible-playbook -i "$INVENTORY" "$playbook"
+    ansible-playbook -i "$INVENTORY" "${ANSIBLE_EXTRA_VARS[@]}" "$playbook"
 done

@@ -7,7 +7,7 @@
     gluster_host_names: "{{ groups['storage'] }}"
   tasks:
     - name: Check that the Gluster brick filesystem is mounted
-      ansible.builtin.command: "mountpoint -q {{ gluster_brick }}"
+      ansible.builtin.command: "mountpoint -q {{ gluster_brick | dirname }}"
       changed_when: false
 
     - name: Create local Gluster brick directory
